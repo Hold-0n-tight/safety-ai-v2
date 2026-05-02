@@ -17,7 +17,7 @@ import ray  # GPU ID 확인용
 import torch
 from flwr.client import NumPyClient
 from flwr.common import Context
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from tqdm.auto import tqdm as _tqdm  # Jupyter/CLI 모두 대응
 
 # ──────────────────── tqdm → Ray‑safe wrapper ────────────────────
@@ -222,12 +222,21 @@ def run_federated_training(cfg: DictConfig):
     # 3) 전략 객체 생성 (FedAvg / FedProx / FedBN)
     strategy = get_strategy(cfg)
 
-    # 4) Flower 시뮬레이션 실행
-    log.info("Flower simulation starting …")
+    # 4) Ray client_resources: cfg.fl.client_resources overrides; otherwise
+    #    auto-detect — request a GPU only when CUDA is actually available, so
+    #    Mac/CPU runs do not block on GPU scheduling.
+    if "client_resources" in cfg.fl:
+        client_resources = OmegaConf.to_container(cfg.fl.client_resources, resolve=True)
+    else:
+        client_resources = {
+            "num_cpus": 1,
+            "num_gpus": 1 if torch.cuda.is_available() else 0,
+        }
+    log.info(f"Flower simulation starting … (client_resources={client_resources})")
     history = fl.simulation.start_simulation(
         client_fn=client_fn,
         num_clients=len(client_splits),
-        client_resources={"num_gpus": 1, "num_cpus": 1},
+        client_resources=client_resources,
         config=fl.server.ServerConfig(num_rounds=cfg.train.rounds),
         strategy=strategy,
     )
