@@ -15,8 +15,8 @@ fork left codex PRs #1–#4 in the numbering).
 | 1.5 | `chore/untrack-data`         | Untrack `data/test/**.tif` and `data/split/*.json` (working copy kept)| merged      | #2    |
 | 2   | `fix/test-path-and-history`  | Fix `loader.py` test-path mismatch + remove duplicate history save    | merged      | #3    |
 | 3   | `feat/mps-support`           | Add MPS device branch (4 sites) + Ray `client_resources` from cfg     | merged      | #4    |
-| 4   | `feat/pathmnist-loader`      | Add `medmnist`, PathMNIST loader, `dataset_split.py` branch, config   | in progress | -     |
-| 5   | `chore/smoke-test-config`    | Smoke-test FL config (rounds=2, tiny model, few clients)              | planned     | -     |
+| 4   | `feat/pathmnist-loader`      | Add `medmnist`, PathMNIST loader, `dataset_split.py` branch, config   | merged      | #5    |
+| 5   | `chore/smoke-test-config`    | Smoke-test FL config (rounds=2, tiny model, few clients)              | in progress | -     |
 
 ## Follow-ups (after PR 5)
 
