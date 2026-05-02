@@ -8,6 +8,45 @@
 - **FedBN**: BatchNorm 파라미터를 로컬로 유지하는 방법
 - **FedProx**: Proximal term을 추가한 안정성 향상 방법
 
+## 🚀 **빠른 시작 (PathMNIST + smoke test)**
+
+데이터를 자동으로 다운로드하는 PathMNIST를 사용해 파이프라인이 동작하는지 ~1분 안에 확인할 수 있습니다.
+
+### 1. 의존성 설치
+
+```bash
+pip install -r requirements.txt
+```
+
+`torch`, `torchvision`, `medmnist`까지 한 번에 설치됩니다. pip이 OS에 맞는 wheel을 자동 선택:
+- **macOS Apple Silicon**: MPS 지원 빌드
+- **Linux/Windows (CPU)**: CPU 빌드
+- **Linux + CUDA**: 별도 인덱스에서 설치 — `Dockerfile`(`cu121`) 참고
+
+### 2. PathMNIST 다운로드 + 클라이언트 분할
+
+```bash
+python scripts/dataset_split.py --split config/split/smoke.yaml
+```
+
+처음 실행 시 `medmnist`가 PathMNIST(size=28, ~2 MB)를 `data/medmnist/`에 자동 다운로드합니다. 그 후 5-client Dirichlet 분할(alpha=10, 거의 IID)을 `data/split/smoke.json`에 저장합니다.
+
+### 3. Smoke run — 세 전략 각각
+
+```bash
+python run_federated.py --config config/fl/smoke_fedavg.yaml
+python run_federated.py --config config/fl/smoke_fedbn.yaml
+python run_federated.py --config config/fl/smoke_fedprox.yaml
+```
+
+각 전략당 ~30초–1분 (Mac MPS 기준). 결과는 `results/fl_<strategy>_<timestamp>/`에 `history.csv` + `history.png`로 저장됩니다.
+
+### Mac / MPS 팁
+
+- `cfg.dataset.size` — PathMNIST 다운로드 해상도 (28/64/128/224). Smoke는 28 권장. 실제 학습은 224로 올리세요.
+- `torch.cuda.is_available()`이 False면 Ray의 `client_resources`가 자동으로 `num_gpus=0`으로 잡혀 GPU 스케줄링 hang이 발생하지 않습니다. 명시적 override가 필요하면 `cfg.fl.client_resources`로.
+- 첫 라운드 device 선택은 stdout에 찍힙니다 (`Client using mps` 등).
+
 ## 🏗️ **프로젝트 구조**
 
 ```
