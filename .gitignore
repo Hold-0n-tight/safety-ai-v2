@@ -1,2 +1,14 @@
 /data/test
 /data/train
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Run logs at repo root (historical artifacts; do not commit)
+/full_log.txt
+/container_logs.txt
+/fl_training_log.txt
+/dirichlet*.txt
+/federated_*.txt
