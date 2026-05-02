@@ -1,0 +1,10 @@
+dataset:
+  name: pathmnist
+  root: data/medmnist
+  size: 28                      # tiny download; transform resizes to model input
+  split:
+    type: dirichlet
+    alpha: 10.0                 # close to IID — smoke tests the pipeline,
+    num_clients: 5              #   not the non-IID code path
+    seed: 42
+    cache: true
