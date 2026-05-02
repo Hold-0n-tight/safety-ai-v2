@@ -9,10 +9,11 @@ from omegaconf import DictConfig
 from torchvision.datasets import ImageFolder
 import matplotlib.pyplot as plt
 
+from train.device import pick_device
 from train.models import init_net
 from train.loader import _infer_img_size, _get_transform
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = pick_device()
 
 
 def _build_loaders(root: Path, batch_size: int, dataset_name: str) -> Tuple[DataLoader, DataLoader]:

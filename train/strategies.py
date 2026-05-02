@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 from omegaconf import DictConfig
 
+from train.device import pick_device
 from train.models import init_net
 from train.loader import _get_transform, _infer_img_size
 
@@ -59,7 +60,7 @@ def _create_centralized_evaluate_fn(cfg: DictConfig):
         model.load_state_dict(state_dict, strict=True)
         
         # 디바이스 설정
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = pick_device()
         model.to(device)
         model.eval()
         
