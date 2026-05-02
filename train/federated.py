@@ -44,12 +44,13 @@ log = logging.getLogger("train")
 
 # ────────────────────── 사용자 모듈 ──────────────────────
 # 경로: project_root/train/{loader,models,strategies}.py
+from train.device import pick_device
 from train.loader import get_dataloaders_from_split
 from train.models import init_net
 from train.strategies import get_strategy
 
 # ────────────────────── 전역 장치 (백업) ──────────────────────
-DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEFAULT_DEVICE = pick_device()
 
 # ────────────────────── Helper ──────────────────────
 
@@ -75,8 +76,8 @@ class FederatedClient(NumPyClient):
             self.device = torch.device("cuda")
             log.info(f"Client assigned GPU {gpu_ids[0]}")
         else:
-            self.device = torch.device("cpu")
-            log.info("Client using CPU")
+            self.device = pick_device()  # mps on Apple Silicon, else cpu
+            log.info(f"Client using {self.device}")
 
         self.model = model.to(self.device)
         self.train_loader = train_loader
