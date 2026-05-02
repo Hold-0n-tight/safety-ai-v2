@@ -204,13 +204,14 @@ def run_federated_training(cfg: DictConfig):
 
         log.info(f"Creating client {part_id} with {len(client_splits[key])} samples")
 
-        # 데이터로더 생성
+        # 데이터로더 생성 (cfg.dataset.size: pathmnist의 다운로드 해상도)
         train_loader, test_loader = get_dataloaders_from_split(
             client_id=part_id,
             split_indices=client_splits[key],
             data_root=data_root,
             batch_size=cfg.train.batch_size,
             dataset_name=cfg.dataset.name,
+            size=int(cfg.dataset.get("size", 28)),
         )
 
         # 모델 초기화

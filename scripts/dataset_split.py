@@ -57,11 +57,17 @@ def main(split_yaml: pathlib.Path, out_dir: pathlib.Path):
     n_clients = int(sp_cfg["num_clients"])
     seed = int(sp_cfg.get("seed", 42))
 
-    # Load dataset from image folder (custom 9-class dataset)
-    if ds_name.lower() == "custom9":
-        transform = transforms.ToTensor()
-        full_ds: Dataset = ImageFolder(root=root, transform=transform)
+    # Load dataset; only labels are needed for Dirichlet partitioning.
+    ds_name_lc = ds_name.lower()
+    if ds_name_lc == "custom9":
+        full_ds: Dataset = ImageFolder(root=root, transform=transforms.ToTensor())
         labels = np.array([sample[1] for sample in full_ds.samples])
+    elif ds_name_lc == "pathmnist":
+        from medmnist import PathMNIST
+        size = int(cfg["dataset"].get("size", 28))
+        root.mkdir(parents=True, exist_ok=True)
+        full_ds = PathMNIST(split="train", root=str(root), download=True, size=size)
+        labels = np.asarray(full_ds.labels).flatten()
     else:
         sys.exit(f"Unsupported dataset {ds_name}")
 

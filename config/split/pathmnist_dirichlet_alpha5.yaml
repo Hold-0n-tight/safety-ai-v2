@@ -1,0 +1,10 @@
+dataset:
+  name: pathmnist
+  root: data/medmnist           # medmnist download cache (gitignored)
+  size: 28                      # PathMNIST resolution: 28 / 64 / 128 / 224
+  split:
+    type: dirichlet
+    alpha: 5.0
+    num_clients: 10
+    seed: 42
+    cache: true

@@ -1,6 +1,7 @@
 /data/test
 /data/train
 /data/split
+/data/medmnist
 
 # macOS
 .DS_Store

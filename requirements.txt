@@ -18,6 +18,7 @@ pyyaml>=6.0
 
 # 데이터 처리
 pillow>=9.0.0
+medmnist>=3.0
 
 # GPU 관리
 gputil>=1.4.0

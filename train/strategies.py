@@ -11,19 +11,17 @@ Custom FL strategies for Flower.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Union
 
 import flwr as fl
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from torchvision.datasets import ImageFolder
 from omegaconf import DictConfig
 
 from train.device import pick_device
 from train.models import init_net
-from train.loader import _get_transform, _infer_img_size
+from train.loader import _infer_img_size, get_test_dataset
 
 
 # ──────────────────────────────────────────────────────────────
@@ -64,21 +62,18 @@ def _create_centralized_evaluate_fn(cfg: DictConfig):
         model.to(device)
         model.eval()
         
-        # 테스트 데이터로더 생성 (data/test)
-        data_root = Path(cfg.dataset.root)  # data/train/raw
-        test_root = data_root.parent.parent / "test"  # data/test
-
-        
-        if not test_root.exists():
-            print(f"Warning: Test directory {test_root} does not exist")
-            return None
-        
+        # 테스트 데이터셋 (custom9 → data/test, pathmnist → built-in test split)
         img_size = _infer_img_size(cfg.dataset.name)
-        test_dataset = ImageFolder(
-            root=test_root,
-            transform=_get_transform(train=False, img_size=img_size)
+        test_dataset = get_test_dataset(
+            cfg.dataset.name,
+            cfg.dataset.root,
+            img_size,
+            size=int(cfg.dataset.get("size", 28)),
         )
-        
+        if test_dataset is None:
+            print(f"Warning: No test dataset available for {cfg.dataset.name}")
+            return None
+
         test_loader = DataLoader(
             test_dataset,
             batch_size=cfg.train.batch_size,
