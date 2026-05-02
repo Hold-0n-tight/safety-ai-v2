@@ -5,7 +5,6 @@
 - FedBN, FedProx, 기본 FedAvg 모두 지원
 """
 from __future__ import annotations
-from datetime import datetime
 
 import json
 import logging
@@ -233,34 +232,5 @@ def run_federated_training(cfg: DictConfig):
     )
     log.info("Simulation finished")
 
-    try:
-        import pandas as pd
-        import matplotlib.pyplot as plt
-
-        losses = history.losses_centralized
-        metrics = history.metrics_centralized.get("accuracy", [])
-
-        rounds = [r for r, _ in losses]
-        loss_vals = [l for _, l in losses]
-        acc_vals = [acc for _, acc in metrics] if metrics else [None] * len(losses)
-
-        history_df = pd.DataFrame({
-            "round": rounds,
-            "loss": loss_vals,
-            "accuracy": acc_vals,
-        })
-
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")          # 추가
-        out_dir = Path("results") / f"fl_{cfg.train.strategy.lower()}_{ts}"  # 수정
-
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        history_path = out_dir / "history.csv"
-
-        history_df.to_csv(history_path, index=False)
-        log.info(f"📊 History saved to {history_path.resolve()}")
-    except Exception as e:
-        log.warning(f"Warning: {str(e)}")
-    
     ray.shutdown()
     return history
