@@ -1,5 +1,9 @@
 /data/test
 /data/train
+/data/split
+
+# macOS
+.DS_Store
 
 # Python
 __pycache__/
