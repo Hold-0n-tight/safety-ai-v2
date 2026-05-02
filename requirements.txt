@@ -1,7 +1,10 @@
 # Core ML
-# torch==2.3.1+cu121  → Dockerfile에서 별도로 설치
-# torchaudio==2.3.1+cu121
-# torchvision==0.18.1+cu121
+# pip resolves the OS-appropriate wheel:
+#   - Linux/Windows w/o CUDA: CPU build
+#   - macOS arm64: includes MPS support
+#   - Linux+CUDA: install separately from the cu121 index (see Dockerfile)
+torch>=2.3
+torchvision>=0.18
 
 numpy>=1.21.0
 
