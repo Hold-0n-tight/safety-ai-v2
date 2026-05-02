@@ -121,9 +121,9 @@ def get_dataloaders_from_split(
     # 2) Shared test/validation set
     #    Priority: data/test/** → data/val/** → 10 % random of client's train
     data_root = Path(data_root)
-    test_root = data_root.parent / "test"   # e.g. data/train/raw -> data/test
+    test_root = data_root.parent.parent / "test"   # e.g. data/train/raw -> data/test
     if not test_root.exists():
-        test_root = data_root.parent / "val"
+        test_root = data_root.parent.parent / "val"
 
     if test_root.exists():
         test_ds = ImageFolder(root=test_root, transform=_get_transform(False, img_size))
