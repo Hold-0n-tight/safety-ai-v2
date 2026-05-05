@@ -26,38 +26,68 @@ import csv
 from omegaconf import OmegaConf
 from train.drive_sync import mirror_tree, resolve_drive_dir
 from train.federated import run_federated_training
+from train.resume import ResumeError, load_resume_state
 from datetime import datetime
 
 
-def save_history(history, out_dir: Path) -> None:
-    """Save FL history to CSV and PNG plot."""
+def save_history(history, out_dir: Path, round_offset: int = 0) -> None:
+    """Save FL history to CSV and PNG plot.
+
+    On resume (``round_offset > 0``), Flower's history reports rounds 1..N for
+    the resumed simulation; we offset them to absolute round numbers and merge
+    with any pre-existing ``history.csv`` from the original run so the file
+    stays a single contiguous record.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    rounds = []
-    acc = []
-    loss = []
+    rounds: list = []
+    acc: list = []
+    loss: list = []
 
     if getattr(history, "metrics_centralized", None):
         acc = [v for _, v in history.metrics_centralized.get("accuracy", [])]
     if getattr(history, "losses_centralized", None):
         loss = [v for _, v in history.losses_centralized]
-        rounds = [r for r, _ in history.losses_centralized]
+        rounds = [r + round_offset for r, _ in history.losses_centralized]
 
+    # Merge with existing rows (if any) up to the first new round, so resume
+    # history.csv preserves the original 1..round_offset entries.
     csv_path = out_dir / "history.csv"
+    existing_rows: list = []
+    if round_offset > 0 and csv_path.exists():
+        with open(csv_path, newline="") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            for row in reader:
+                if not row:
+                    continue
+                try:
+                    r = int(row[0])
+                except ValueError:
+                    continue
+                if r <= round_offset:
+                    existing_rows.append(row)
+
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["round", "loss", "accuracy"])
+        for row in existing_rows:
+            writer.writerow(row)
         for i, r in enumerate(rounds):
             a = acc[i] if i < len(acc) else ""
             l = loss[i] if i < len(loss) else ""
             writer.writerow([r, l, a])
 
-    if rounds:
+    # Plot the merged series so the PNG also reflects the full timeline.
+    all_rounds = [int(row[0]) for row in existing_rows] + rounds
+    all_loss = [float(row[1]) for row in existing_rows if row[1] != ""] + loss
+    all_acc = [float(row[2]) for row in existing_rows if row[2] != ""] + acc
+    if all_rounds:
         plt.figure()
-        if loss:
-            plt.plot(rounds, loss, label="loss")
-        if acc:
-            plt.plot(rounds[: len(acc)], acc, label="accuracy")
+        if all_loss:
+            plt.plot(all_rounds[: len(all_loss)], all_loss, label="loss")
+        if all_acc:
+            plt.plot(all_rounds[: len(all_acc)], all_acc, label="accuracy")
         plt.xlabel("Round")
         plt.legend()
         plt.tight_layout()
@@ -85,6 +115,12 @@ def main():
         type=Path,
         default=None,
         help="로그를 저장할 파일 경로"
+    )
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        help="기존 run dir에서 학습 재개 (예: results/fl_fedavg_20260505-1430 또는 Drive 경로)"
     )
 
     args = parser.parse_args()
@@ -134,16 +170,37 @@ def main():
     
     # FL 훈련 실행
     try:
-        # Create the run dir up-front so the strategy can write per-round
-        # checkpoints into <run_dir>/checkpoints/ during training (PR #7).
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        log_dir = Path("results") / f"fl_{cfg.train.strategy}_{ts}"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        cfg.train.run_dir = str(log_dir)
+        initial_parameters = None
+        round_offset = 0
+        if args.resume is not None:
+            # Resume path: load latest.pt, validate strategy, mirror tree if
+            # the resume dir is outside results/, and seed cfg.train.run_dir
+            # / round_offset for the rest of this function.
+            try:
+                initial_parameters, round_offset = load_resume_state(args.resume, cfg)
+            except ResumeError as e:
+                log.error(f"❌ Resume 실패: {e}")
+                return
+            if round_offset >= int(cfg.train.rounds):
+                log.info(
+                    f"이미 완료된 run입니다 (round_offset={round_offset} >= "
+                    f"cfg.train.rounds={cfg.train.rounds}). 학습 진입 안 함."
+                )
+                return
+            log_dir = Path(cfg.train.run_dir)
+            log.info(f"   재개 시작 라운드: {round_offset + 1} / {cfg.train.rounds}")
+        else:
+            # Fresh run: create the run dir up-front so the strategy can
+            # write per-round checkpoints into <run_dir>/checkpoints/ during
+            # training (PR #7).
+            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+            log_dir = Path("results") / f"fl_{cfg.train.strategy}_{ts}"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            cfg.train.run_dir = str(log_dir)
         log.info(f"   결과 디렉토리: {log_dir}")
 
-        history = run_federated_training(cfg)
-        save_history(history, log_dir)
+        history = run_federated_training(cfg, initial_parameters=initial_parameters)
+        save_history(history, log_dir, round_offset=round_offset)
 
         # End-of-run Drive mirror: copies the entire run dir (history + any
         # straggler files not caught by per-round mirror). No-op if Drive is
