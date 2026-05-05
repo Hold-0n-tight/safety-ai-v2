@@ -31,8 +31,21 @@ from medmnist import PathMNIST
 # Helper: infer proper image size from model / dataset name
 # ──────────────────────────────────────────────────────────────
 
-def _infer_img_size(name: str) -> int:
-    """Return input resolution based on model/dataset identifier."""
+def _infer_img_size(name: str, size: Optional[int] = None) -> int:
+    """Return input resolution based on model/dataset identifier.
+
+    If ``size`` is explicitly provided (and > 0), it overrides the
+    model-default heuristic. This lets callers couple the dataset's
+    on-disk resolution (``cfg.dataset.size``) with the model input —
+    the previous default of always returning 224 means a config with
+    ``size=64`` would still upsample 64→224 on every batch, which is
+    why ``size=224`` PathMNIST runs are the only fast path today.
+
+    Backward compat: when ``size`` is None or 0, falls back to the
+    model heuristic (224 for everything except EfficientNet-B4 → 380).
+    """
+    if size is not None and size > 0:
+        return int(size)
     name = name.lower()
     if "efficientnet_b4" in name or "efficientnet-b4" in name:
         return 380
@@ -177,7 +190,7 @@ def get_dataloaders_from_split(
         PathMNIST download resolution (28 / 64 / 128 / 224). Ignored for other
         datasets. Default 28 for fast iteration; override via cfg.dataset.size.
     """
-    img_size = _infer_img_size(dataset_name)
+    img_size = _infer_img_size(dataset_name, size=size)
 
     # 1) Train subset specific to this client
     full_train_ds = _load_dataset(
