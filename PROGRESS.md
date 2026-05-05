@@ -20,9 +20,9 @@ fork left codex PRs #1–#4 in the numbering).
 | 6   | `feat/checkpoint-saving`     | Per-round global-model checkpoints + sidecar meta + `latest.pt`       | merged      | #7    |
 | 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | merged      | #8    |
 | 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | merged      | #9    |
-| 9   | `feat/main-exp-configs`      | 12 FL configs: 3 strategies × 4 alphas (PathMNIST, 50 rounds, 5 cli)  | open        | #10   |
+| 9   | `feat/main-exp-configs`      | 12 FL configs: 3 strategies × 4 alphas (PathMNIST, 50 rounds, 5 cli)  | merged      | #10   |
 
-**Cleanup series complete; main-experiment infra series in progress.**
+**Cleanup + infra series complete (PRs #1–#10). Main experiment phase begins — see `docs/main_exp_runbook.md`.**
 
 ## Main-experiment infra series (Colab T4)
 
@@ -34,7 +34,24 @@ small PRs:
 | 6   | `feat/checkpoint-saving`     | Save aggregated global model after each round (state_dict + meta)     | merged      |
 | 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | merged      |
 | 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | merged      |
-| 9   | `feat/main-exp-configs`      | 12 FL configs: 3 strategies × 4 alphas (PathMNIST, 50 rounds, 5 cli)  | open        |
+| 9   | `feat/main-exp-configs`      | 12 FL configs: 3 strategies × 4 alphas (PathMNIST, 50 rounds, 5 cli)  | merged      |
+
+## Main experiment phase (operational, no PRs)
+
+Infra series merged 2026-05-05; the matrix itself is now run on Colab.
+Operational guidance lives in [`docs/main_exp_runbook.md`](docs/main_exp_runbook.md):
+session strategy, Drive layout, resume recipe, post-matrix analysis
+snippet. The runbook is updated directly on `develop` as we learn what
+works — no PR for ops changes.
+
+What gets a PR while running the matrix:
+- **Bug fixes** discovered during runs → small `fix/...` PR against `develop`.
+- **Analysis tooling** (e.g. `scripts/aggregate_main_exp.py`) → small `scripts/` PR.
+- **Anything that changes training behaviour** (loss, optimizer, eval) → PR. Don't slip
+  behaviour changes into the runbook.
+
+What does *not* get a PR:
+- Re-running cells, tweaking `DRIVE_DIR`, restarting sessions, etc.
 
 ## Follow-ups (after PR 5)
 
