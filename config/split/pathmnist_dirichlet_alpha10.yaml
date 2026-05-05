@@ -4,7 +4,7 @@ dataset:
   size: 28                      # split indices are size-independent; size=28 keeps generation cheap
   split:
     type: dirichlet
-    alpha: 5.0
+    alpha: 10.0                 # mild non-IID (close to IID)
     num_clients: 5              # main-exp: unified to 5 clients across all alphas
     seed: 42
     cache: true
