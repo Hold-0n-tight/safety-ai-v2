@@ -17,8 +17,21 @@ fork left codex PRs #1–#4 in the numbering).
 | 3   | `feat/mps-support`           | Add MPS device branch (4 sites) + Ray `client_resources` from cfg     | merged      | #4    |
 | 4   | `feat/pathmnist-loader`      | Add `medmnist`, PathMNIST loader, `dataset_split.py` branch, config   | merged      | #5    |
 | 5   | `chore/smoke-test-config`    | Smoke-test FL config (rounds=2, tiny model, few clients) + README     | merged      | #6    |
+| 6   | `feat/checkpoint-saving`     | Per-round global-model checkpoints + sidecar meta + `latest.pt`       | open        | #7    |
 
-**Series complete.** Repo is ready for PathMNIST experiments on Mac MPS / CPU / CUDA.
+**Cleanup series complete; main-experiment infra series in progress.**
+
+## Main-experiment infra series (Colab T4)
+
+Colab disconnects + 50-round runs require persisted state. Series of 4
+small PRs:
+
+| #   | Branch                       | Goal                                                                  | Status      |
+| --- | ---------------------------- | --------------------------------------------------------------------- | ----------- |
+| 6   | `feat/checkpoint-saving`     | Save aggregated global model after each round (state_dict + meta)     | open        |
+| 7   | `feat/drive-backup`          | Auto-rsync `results/<run>/` to Google Drive at end of run             | planned     |
+| 8   | `feat/resume-training`       | `--resume <run_dir>` flag continues from `latest.pt`                  | planned     |
+| 9   | `feat/main-exp-configs`      | rounds=50, local_epochs=5, alpha sweep configs (FedAvg/Prox/BN)       | planned     |
 
 ## Follow-ups (after PR 5)
 
