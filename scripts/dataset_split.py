@@ -122,6 +122,7 @@ def main(split_yaml: pathlib.Path, out_dir: pathlib.Path):
     ax.legend(title="Class", bbox_to_anchor=(1.05, 1), loc="upper left")
     fig.tight_layout()
     plot_path = out_dir / f"{split_yaml.stem}_dist.png"
+    plot_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(plot_path)
     plt.close(fig)
     plot_path = plot_path.resolve()
