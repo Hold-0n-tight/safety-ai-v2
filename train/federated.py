@@ -184,8 +184,12 @@ class FederatedClient(NumPyClient):
 
 # ────────────────────── 시뮬레이션 런처 ─────────────────────
 
-def run_federated_training(cfg: DictConfig):
-    """Hydra DictConfig → Flower Simulation 실행."""
+def run_federated_training(cfg: DictConfig, initial_parameters=None):
+    """Hydra DictConfig → Flower Simulation 실행.
+
+    ``initial_parameters`` is supplied by ``--resume`` to seed the global
+    model from a previous round's aggregated weights.
+    """
 
     # 1) 클라이언트별 인덱스 불러오기
     split_path = Path(cfg.dataset.split_path)
@@ -221,7 +225,7 @@ def run_federated_training(cfg: DictConfig):
         return numpy_client.to_client()  # NumPyClient를 Client로 변환
 
     # 3) 전략 객체 생성 (FedAvg / FedProx / FedBN)
-    strategy = get_strategy(cfg)
+    strategy = get_strategy(cfg, initial_parameters=initial_parameters)
 
     # 4) Ray client_resources: cfg.fl.client_resources overrides; otherwise
     #    auto-detect — request a GPU only when CUDA is actually available, so
@@ -233,12 +237,19 @@ def run_federated_training(cfg: DictConfig):
             "num_cpus": 1,
             "num_gpus": 1 if torch.cuda.is_available() else 0,
         }
-    log.info(f"Flower simulation starting … (client_resources={client_resources})")
+    # On resume, only run the remaining rounds. round_offset is set by
+    # train.resume.load_resume_state when --resume was used.
+    round_offset = int(cfg.train.get("round_offset", 0))
+    remaining_rounds = int(cfg.train.rounds) - round_offset
+    log.info(
+        "Flower simulation starting … (client_resources=%s, rounds=%d, offset=%d)",
+        client_resources, remaining_rounds, round_offset,
+    )
     history = fl.simulation.start_simulation(
         client_fn=client_fn,
         num_clients=len(client_splits),
         client_resources=client_resources,
-        config=fl.server.ServerConfig(num_rounds=cfg.train.rounds),
+        config=fl.server.ServerConfig(num_rounds=remaining_rounds),
         strategy=strategy,
     )
     log.info("Simulation finished")

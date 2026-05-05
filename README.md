@@ -61,6 +61,22 @@ os.environ['DRIVE_DIR'] = '/content/drive/MyDrive/safety-ai-runs'
 
 YAML로 지정하고 싶으면 `cfg.train.drive_dir`이 env보다 우선합니다. 라운드별 미러를 끄려면 `cfg.train.drive_sync_per_round: false` (기본 true). Drive 경로가 존재하지 않거나 쓰기 실패해도 학습은 정상 진행되고 경고만 로그에 남습니다.
 
+### 학습 재개 (`--resume`)
+
+Colab disconnect 후 같은 cfg로 다시 실행하면서 `--resume`에 기존 run dir(로컬 또는 Drive)을 넘기면 마지막에 저장된 라운드부터 이어 학습합니다. 체크포인트 파일은 같은 dir에 `round_NNN.pt` 형식으로 계속 추가되고 `history.csv`도 단일 파일로 merge됩니다.
+
+```bash
+# 로컬 run dir에서 재개
+python run_federated.py -c config/fl/main_exp_fedavg.yaml \
+    --resume results/fl_fedavg_20260505-1430
+
+# Drive에 남은 run dir에서 재개 (자동으로 로컬에 미러 후 진행)
+python run_federated.py -c config/fl/main_exp_fedavg.yaml \
+    --resume /content/drive/MyDrive/safety-ai-runs/fl_fedavg_20260505-1430
+```
+
+cfg.train.strategy가 체크포인트의 strategy와 다르면 hard error로 막습니다 (FedAvg vs FedBN을 섞어 재개하면 BN 의미가 깨지므로). `round_offset >= cfg.train.rounds`이면 이미 완료된 run으로 보고 그대로 종료합니다.
+
 ## 🏗️ **프로젝트 구조**
 
 ```

@@ -48,12 +48,17 @@ def _init_checkpointing(strategy_obj, cfg: DictConfig, state_dict_keys) -> None:
     starts; if it is missing (older callers) checkpointing silently no-ops.
     Drive mirror destination is computed from ``resolve_drive_dir(cfg)`` and
     only attached if Drive is reachable AND per-round sync is enabled.
+
+    ``cfg.train.round_offset`` is set by ``--resume`` so that filenames /
+    meta / log lines use absolute round numbers (round 38 instead of round 1)
+    when continuing a previous run.
     """
     train_cfg = cfg.train
     strategy_obj._save_checkpoints = bool(train_cfg.get("save_checkpoints", True))
     strategy_obj._checkpoint_every = int(train_cfg.get("checkpoint_every", 1))
     strategy_obj._strategy_name = str(train_cfg.strategy).lower()
     strategy_obj._state_dict_keys = list(state_dict_keys)
+    strategy_obj._round_offset = int(train_cfg.get("round_offset", 0))
 
     run_dir = train_cfg.get("run_dir", None)
     strategy_obj._checkpoint_dir = (
@@ -78,11 +83,12 @@ def _maybe_save_checkpoint(
         return
     if strategy_obj._checkpoint_dir is None:
         return
-    if server_round % strategy_obj._checkpoint_every != 0:
+    absolute_round = server_round + getattr(strategy_obj, "_round_offset", 0)
+    if absolute_round % strategy_obj._checkpoint_every != 0:
         return
     save_round_checkpoint(
         parameters=parameters,
-        round_num=server_round,
+        round_num=absolute_round,
         out_dir=strategy_obj._checkpoint_dir,
         state_dict_keys=strategy_obj._state_dict_keys,
         strategy=strategy_obj._strategy_name,
@@ -95,8 +101,13 @@ def _maybe_save_checkpoint(
 # ──────────────────────────────────────────────────────────────
 def _create_centralized_evaluate_fn(cfg: DictConfig):
     """data/test 데이터로 중앙화된 평가를 수행하는 함수를 생성합니다."""
-    
+
     def evaluate_fn(server_round: int, parameters, config: Dict[str, fl.common.Scalar]):
+        # During resume, server_round is Flower's local counter (1..N for the
+        # resumed simulation). Add the offset so the log line shows the
+        # absolute round number (e.g. 38 instead of 1).
+        round_offset = int(cfg.train.get("round_offset", 0))
+        absolute_round = server_round + round_offset
         # 글로벌 모델 생성
         model = init_net(cfg.model.name, cfg.model.output_dim)
         
@@ -157,7 +168,7 @@ def _create_centralized_evaluate_fn(cfg: DictConfig):
         accuracy = total_correct / total_samples
         avg_loss = total_loss / total_samples
         
-        print(f"Round {server_round} - Centralized Test | Loss: {avg_loss:.4f} | Accuracy: {accuracy:.4f}")
+        print(f"Round {absolute_round} - Centralized Test | Loss: {avg_loss:.4f} | Accuracy: {accuracy:.4f}")
         
         return avg_loss, {"accuracy": accuracy}
     
@@ -170,12 +181,13 @@ def _create_centralized_evaluate_fn(cfg: DictConfig):
 class FedAvgStrategy(fl.server.strategy.FedAvg):
     """얇은 래퍼—Flower 기본 FedAvg와 동일하지만 cfg 인자를 통일."""
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, initial_parameters: Optional[fl.common.Parameters] = None):
         super().__init__(
             min_fit_clients=cfg.fl.min_fit_clients,
             min_available_clients=cfg.fl.min_available_clients,
             fraction_fit=cfg.fl.get("fraction_fit", 1.0),
             evaluate_fn=_create_centralized_evaluate_fn(cfg),  # 중앙화된 평가 추가
+            initial_parameters=initial_parameters,
         )
         ref_model = init_net(cfg.model.name, cfg.model.output_dim)
         _init_checkpointing(self, cfg, ref_model.state_dict().keys())
@@ -199,13 +211,14 @@ class FedAvgStrategy(fl.server.strategy.FedAvg):
 class FedProxStrategy(fl.server.strategy.FedAvg):
     """FedAvg + proximal term(μ)을 클라이언트 config로 전달."""
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, initial_parameters: Optional[fl.common.Parameters] = None):
         self.mu: float = float(cfg.train.mu)
         super().__init__(
             min_fit_clients=cfg.fl.min_fit_clients,
             min_available_clients=cfg.fl.min_available_clients,
             fraction_fit=cfg.fl.get("fraction_fit", 1.0),
             evaluate_fn=_create_centralized_evaluate_fn(cfg),  # 중앙화된 평가 추가
+            initial_parameters=initial_parameters,
         )
         ref_model = init_net(cfg.model.name, cfg.model.output_dim)
         _init_checkpointing(self, cfg, ref_model.state_dict().keys())
@@ -242,7 +255,7 @@ class FedProxStrategy(fl.server.strategy.FedAvg):
 class FedBNStrategy(fl.server.strategy.FedAvg):
     """BatchNorm 파라미터를 평균에서 제외하는 FedBN 구현."""
 
-    def __init__(self, cfg: DictConfig):
+    def __init__(self, cfg: DictConfig, initial_parameters: Optional[fl.common.Parameters] = None):
         # 모델 한 번 생성 → state_dict 키 순서 확보
         model = init_net(cfg.model.name, cfg.model.output_dim)
         self._parameter_names: List[str] = list(model.state_dict().keys())
@@ -252,6 +265,7 @@ class FedBNStrategy(fl.server.strategy.FedAvg):
             min_available_clients=cfg.fl.min_available_clients,
             fraction_fit=cfg.fl.get("fraction_fit", 1.0),
             evaluate_fn=_create_centralized_evaluate_fn(cfg),  # 중앙화된 평가 추가
+            initial_parameters=initial_parameters,
         )
         _init_checkpointing(self, cfg, self._parameter_names)
 
@@ -313,13 +327,16 @@ class FedBNStrategy(fl.server.strategy.FedAvg):
 # ──────────────────────────────────────────────────────────────
 # 4. Strategy Factory
 # ──────────────────────────────────────────────────────────────
-def get_strategy(cfg: DictConfig) -> fl.server.strategy.Strategy:
+def get_strategy(
+    cfg: DictConfig,
+    initial_parameters: Optional[fl.common.Parameters] = None,
+) -> fl.server.strategy.Strategy:
     """cfg.train.strategy 문자열에 맞는 Strategy 인스턴스를 반환."""
     strat = cfg.train.strategy.lower()
     if strat == "fedavg":
-        return FedAvgStrategy(cfg)
+        return FedAvgStrategy(cfg, initial_parameters=initial_parameters)
     if strat == "fedprox":
-        return FedProxStrategy(cfg)
+        return FedProxStrategy(cfg, initial_parameters=initial_parameters)
     if strat == "fedbn":
-        return FedBNStrategy(cfg)
+        return FedBNStrategy(cfg, initial_parameters=initial_parameters)
     raise ValueError(f"Unknown strategy '{cfg.train.strategy}'")
