@@ -77,6 +77,29 @@ python run_federated.py -c config/fl/main_exp_fedavg.yaml \
 
 cfg.train.strategy가 체크포인트의 strategy와 다르면 hard error로 막습니다 (FedAvg vs FedBN을 섞어 재개하면 BN 의미가 깨지므로). `round_offset >= cfg.train.rounds`이면 이미 완료된 run으로 보고 그대로 종료합니다.
 
+### 본 실험 (3 strategies × 4 Dirichlet alphas)
+
+`config/fl/main/`에 12개 config가 들어 있습니다 — `{fedavg,fedbn,fedprox} × alpha={0.5, 1, 5, 10}`. 모두 rounds=50, local_epochs=5, batch_size=64, size=224, 5 clients, seed=42 (재현성). 한 run 약 25분 (T4, efficientnet_b0) → 매트릭스 전체 약 5시간.
+
+```bash
+# 1) 4개 split 생성 (한 번만)
+for ALPHA in pathmnist_dirichlet_alpha_05 \
+             pathmnist_dirichlet_alpha1 \
+             pathmnist_dirichlet_alpha5 \
+             pathmnist_dirichlet_alpha10; do
+    python scripts/dataset_split.py --split config/split/${ALPHA}.yaml
+done
+
+# 2) 12 FL run 순차 실행
+for STRAT in fedavg fedbn fedprox; do
+    for A in 05 1 5 10; do
+        python run_federated.py --config config/fl/main/${STRAT}_a${A}.yaml
+    done
+done
+```
+
+Colab에서는 `DRIVE_DIR` env를 미리 set해두면 매 라운드 + 학습 종료마다 Drive로 자동 백업되고, 끊기면 `--resume <run_dir>`로 이어서 학습할 수 있습니다 (위의 두 섹션 참고).
+
 ## 🏗️ **프로젝트 구조**
 
 ```
