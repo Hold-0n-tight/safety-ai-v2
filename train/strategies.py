@@ -22,6 +22,7 @@ from omegaconf import DictConfig
 
 from train.checkpoint import save_round_checkpoint
 from train.device import pick_device
+from train.drive_sync import per_round_enabled, resolve_drive_dir
 from train.models import init_net
 from train.loader import _infer_img_size, get_test_dataset
 
@@ -45,6 +46,8 @@ def _init_checkpointing(strategy_obj, cfg: DictConfig, state_dict_keys) -> None:
 
     ``cfg.train.run_dir`` is injected by ``run_federated.py`` before training
     starts; if it is missing (older callers) checkpointing silently no-ops.
+    Drive mirror destination is computed from ``resolve_drive_dir(cfg)`` and
+    only attached if Drive is reachable AND per-round sync is enabled.
     """
     train_cfg = cfg.train
     strategy_obj._save_checkpoints = bool(train_cfg.get("save_checkpoints", True))
@@ -56,6 +59,14 @@ def _init_checkpointing(strategy_obj, cfg: DictConfig, state_dict_keys) -> None:
     strategy_obj._checkpoint_dir = (
         Path(run_dir) / "checkpoints" if run_dir else None
     )
+
+    drive_root = resolve_drive_dir(cfg)
+    if drive_root is not None and run_dir is not None and per_round_enabled(cfg):
+        strategy_obj._drive_checkpoint_dir = (
+            drive_root / Path(run_dir).name / "checkpoints"
+        )
+    else:
+        strategy_obj._drive_checkpoint_dir = None
 
 
 def _maybe_save_checkpoint(
@@ -75,6 +86,7 @@ def _maybe_save_checkpoint(
         out_dir=strategy_obj._checkpoint_dir,
         state_dict_keys=strategy_obj._state_dict_keys,
         strategy=strategy_obj._strategy_name,
+        drive_dir=strategy_obj._drive_checkpoint_dir,
     )
 
 
