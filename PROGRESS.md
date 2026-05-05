@@ -20,6 +20,7 @@ fork left codex PRs #1–#4 in the numbering).
 | 6   | `feat/checkpoint-saving`     | Per-round global-model checkpoints + sidecar meta + `latest.pt`       | merged      | #7    |
 | 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | merged      | #8    |
 | 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | merged      | #9    |
+| 9   | `feat/main-exp-configs`      | 12 FL configs: 3 strategies × 4 alphas (PathMNIST, 50 rounds, 5 cli)  | open        | #10   |
 
 **Cleanup series complete; main-experiment infra series in progress.**
 
@@ -33,7 +34,7 @@ small PRs:
 | 6   | `feat/checkpoint-saving`     | Save aggregated global model after each round (state_dict + meta)     | merged      |
 | 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | merged      |
 | 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | merged      |
-| 9   | `feat/main-exp-configs`      | rounds=50, local_epochs=5, alpha sweep configs (FedAvg/Prox/BN)       | planned     |
+| 9   | `feat/main-exp-configs`      | 12 FL configs: 3 strategies × 4 alphas (PathMNIST, 50 rounds, 5 cli)  | open        |
 
 ## Follow-ups (after PR 5)
 
@@ -41,6 +42,11 @@ small PRs:
   per-PR `git rm --cached` only removes blobs from HEAD, not from pack).
   Destructive history rewrite — schedule separately and coordinate with all
   collaborators before running.
+- **Model sanity check (deferred):** once the primary 3×4 matrix
+  (`config/fl/main/`) results are in, decide whether to add a resnet50
+  pass at a representative alpha (likely 1.0) to verify conclusions are
+  not efficientnet_b0-specific. Defer until we see whether the
+  efficientnet_b0 results are clean enough to justify the extra compute.
 
 ## Notes / lessons learned
 
