@@ -19,7 +19,7 @@ fork left codex PRs #1–#4 in the numbering).
 | 5   | `chore/smoke-test-config`    | Smoke-test FL config (rounds=2, tiny model, few clients) + README     | merged      | #6    |
 | 6   | `feat/checkpoint-saving`     | Per-round global-model checkpoints + sidecar meta + `latest.pt`       | merged      | #7    |
 | 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | merged      | #8    |
-| 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | open        | #9    |
+| 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | merged      | #9    |
 
 **Cleanup series complete; main-experiment infra series in progress.**
 
@@ -32,7 +32,7 @@ small PRs:
 | --- | ---------------------------- | --------------------------------------------------------------------- | ----------- |
 | 6   | `feat/checkpoint-saving`     | Save aggregated global model after each round (state_dict + meta)     | merged      |
 | 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | merged      |
-| 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | open        |
+| 8   | `feat/resume-training`       | `--resume <run_dir>` continues from `latest.pt` with merged history   | merged      |
 | 9   | `feat/main-exp-configs`      | rounds=50, local_epochs=5, alpha sweep configs (FedAvg/Prox/BN)       | planned     |
 
 ## Follow-ups (after PR 5)
