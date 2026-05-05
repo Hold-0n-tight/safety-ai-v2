@@ -133,9 +133,15 @@ def main():
     
     # FL 훈련 실행
     try:
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S") 
-        history = run_federated_training(cfg)
+        # Create the run dir up-front so the strategy can write per-round
+        # checkpoints into <run_dir>/checkpoints/ during training (PR #7).
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         log_dir = Path("results") / f"fl_{cfg.train.strategy}_{ts}"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        cfg.train.run_dir = str(log_dir)
+        log.info(f"   결과 디렉토리: {log_dir}")
+
+        history = run_federated_training(cfg)
         save_history(history, log_dir)
         log.info("✅ Federated Learning 완료!")
     except Exception as e:

@@ -11,6 +11,7 @@ Custom FL strategies for Flower.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Union
 
 import flwr as fl
@@ -19,6 +20,7 @@ import torch
 from torch.utils.data import DataLoader
 from omegaconf import DictConfig
 
+from train.checkpoint import save_round_checkpoint
 from train.device import pick_device
 from train.models import init_net
 from train.loader import _infer_img_size, get_test_dataset
@@ -32,6 +34,47 @@ def _is_bn_param(name: str) -> bool:
         ".running_mean" in name
         or ".running_var" in name
         or ".num_batches_tracked" in name
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# Helper: per-round checkpointing (PR #7)
+# ──────────────────────────────────────────────────────────────
+def _init_checkpointing(strategy_obj, cfg: DictConfig, state_dict_keys) -> None:
+    """Attach checkpoint config + model state_dict keys onto a strategy.
+
+    ``cfg.train.run_dir`` is injected by ``run_federated.py`` before training
+    starts; if it is missing (older callers) checkpointing silently no-ops.
+    """
+    train_cfg = cfg.train
+    strategy_obj._save_checkpoints = bool(train_cfg.get("save_checkpoints", True))
+    strategy_obj._checkpoint_every = int(train_cfg.get("checkpoint_every", 1))
+    strategy_obj._strategy_name = str(train_cfg.strategy).lower()
+    strategy_obj._state_dict_keys = list(state_dict_keys)
+
+    run_dir = train_cfg.get("run_dir", None)
+    strategy_obj._checkpoint_dir = (
+        Path(run_dir) / "checkpoints" if run_dir else None
+    )
+
+
+def _maybe_save_checkpoint(
+    strategy_obj, server_round: int, parameters: Optional[fl.common.Parameters]
+) -> None:
+    if parameters is None:
+        return
+    if not getattr(strategy_obj, "_save_checkpoints", False):
+        return
+    if strategy_obj._checkpoint_dir is None:
+        return
+    if server_round % strategy_obj._checkpoint_every != 0:
+        return
+    save_round_checkpoint(
+        parameters=parameters,
+        round_num=server_round,
+        out_dir=strategy_obj._checkpoint_dir,
+        state_dict_keys=strategy_obj._state_dict_keys,
+        strategy=strategy_obj._strategy_name,
     )
 
 
@@ -122,6 +165,8 @@ class FedAvgStrategy(fl.server.strategy.FedAvg):
             fraction_fit=cfg.fl.get("fraction_fit", 1.0),
             evaluate_fn=_create_centralized_evaluate_fn(cfg),  # 중앙화된 평가 추가
         )
+        ref_model = init_net(cfg.model.name, cfg.model.output_dim)
+        _init_checkpointing(self, cfg, ref_model.state_dict().keys())
 
     def configure_fit(self, server_round: int, parameters: fl.common.Parameters, client_manager: fl.server.client_manager.ClientManager):
         """라운드별 참여 클라이언트 로깅 추가"""
@@ -129,6 +174,11 @@ class FedAvgStrategy(fl.server.strategy.FedAvg):
         client_ids = [int(proxy.cid) for proxy, _ in config]
         print(f"\n🔄 Round {server_round} - 참여 클라이언트: {sorted(client_ids)} (총 {len(client_ids)}개)")
         return config
+
+    def aggregate_fit(self, server_round, results, failures):
+        aggregated_parameters, metrics = super().aggregate_fit(server_round, results, failures)
+        _maybe_save_checkpoint(self, server_round, aggregated_parameters)
+        return aggregated_parameters, metrics
 
 
 # ──────────────────────────────────────────────────────────────
@@ -145,6 +195,13 @@ class FedProxStrategy(fl.server.strategy.FedAvg):
             fraction_fit=cfg.fl.get("fraction_fit", 1.0),
             evaluate_fn=_create_centralized_evaluate_fn(cfg),  # 중앙화된 평가 추가
         )
+        ref_model = init_net(cfg.model.name, cfg.model.output_dim)
+        _init_checkpointing(self, cfg, ref_model.state_dict().keys())
+
+    def aggregate_fit(self, server_round, results, failures):
+        aggregated_parameters, metrics = super().aggregate_fit(server_round, results, failures)
+        _maybe_save_checkpoint(self, server_round, aggregated_parameters)
+        return aggregated_parameters, metrics
 
     def configure_fit(  # noqa: D401
         self,
@@ -184,6 +241,7 @@ class FedBNStrategy(fl.server.strategy.FedAvg):
             fraction_fit=cfg.fl.get("fraction_fit", 1.0),
             evaluate_fn=_create_centralized_evaluate_fn(cfg),  # 중앙화된 평가 추가
         )
+        _init_checkpointing(self, cfg, self._parameter_names)
 
     def configure_fit(self, server_round: int, parameters: fl.common.Parameters, client_manager: fl.server.client_manager.ClientManager):
         """라운드별 참여 클라이언트 로깅 추가"""
@@ -232,7 +290,12 @@ class FedBNStrategy(fl.server.strategy.FedAvg):
             total_examples = sum(fit_res.num_examples for _, fit_res in results)
             metrics_aggregated["total_examples"] = total_examples
 
-        return fl.common.ndarrays_to_parameters(aggregated_ndarrays), metrics_aggregated
+        aggregated_parameters = fl.common.ndarrays_to_parameters(aggregated_ndarrays)
+        # FedBN: BN slots in the saved checkpoint are zero (server-side dummies).
+        # Each client keeps its own BN locally per FedBN's design — the resume
+        # path (PR #9) re-initialises BN per client, which matches that contract.
+        _maybe_save_checkpoint(self, rnd, aggregated_parameters)
+        return aggregated_parameters, metrics_aggregated
 
 
 # ──────────────────────────────────────────────────────────────

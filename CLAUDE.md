@@ -49,7 +49,7 @@ The split YAML and FL YAML are **decoupled**: an FL run does not regenerate spli
 2. Defines `client_fn(context)` that pulls `partition-id` from `context.node_config`, builds per-client `DataLoader`s via `get_dataloaders_from_split`, instantiates a fresh model via `init_net`, and wraps in `FederatedClient`.
 3. Builds a strategy via `get_strategy(cfg)` (FedAvg / FedProx / FedBN).
 4. Calls `fl.simulation.start_simulation(...)` with `num_clients=len(client_splits)` and **hardcoded `client_resources={"num_gpus": 1, "num_cpus": 1}`** (`train/federated.py:230`). This will not work on CPU-only or MPS machines without modification — Ray will spin trying to allocate a GPU.
-5. Saves `history.csv` to `results/fl_<strategy>_<ts>/` (and `run_federated.py` *also* writes the same file via its own `save_history`, so each run produces two timestamped result dirs).
+5. `run_federated.py` creates the timestamped run dir (`results/fl_<strategy>_<ts>/`) **before** training, injects it as `cfg.train.run_dir`, and writes `history.csv` there once training finishes. The strategy uses the same dir to drop per-round checkpoints into `<run_dir>/checkpoints/`.
 
 ### Strategy specifics (`train/strategies.py`)
 
