@@ -129,12 +129,14 @@ def _create_centralized_evaluate_fn(cfg: DictConfig):
         model.eval()
         
         # 테스트 데이터셋 (custom9 → data/test, pathmnist → built-in test split)
-        img_size = _infer_img_size(cfg.dataset.name)
+        # Honor cfg.dataset.size as the model input resolution too — see PR-A.
+        size_override = cfg.dataset.get("size", None)
+        img_size = _infer_img_size(cfg.dataset.name, size=size_override)
         test_dataset = get_test_dataset(
             cfg.dataset.name,
             cfg.dataset.root,
             img_size,
-            size=int(cfg.dataset.get("size", 28)),
+            size=int(size_override) if size_override is not None else 28,
         )
         if test_dataset is None:
             print(f"Warning: No test dataset available for {cfg.dataset.name}")
