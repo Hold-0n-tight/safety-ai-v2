@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import csv
 
 from omegaconf import OmegaConf
+from train.drive_sync import mirror_tree, resolve_drive_dir
 from train.federated import run_federated_training
 from datetime import datetime
 
@@ -143,6 +144,16 @@ def main():
 
         history = run_federated_training(cfg)
         save_history(history, log_dir)
+
+        # End-of-run Drive mirror: copies the entire run dir (history + any
+        # straggler files not caught by per-round mirror). No-op if Drive is
+        # not configured or not reachable.
+        drive_root = resolve_drive_dir(cfg)
+        if drive_root is not None:
+            drive_run_dir = drive_root / log_dir.name
+            mirror_tree(log_dir, drive_run_dir)
+            log.info(f"   Drive 백업: {drive_run_dir}")
+
         log.info("✅ Federated Learning 완료!")
     except Exception as e:
         log.error(f"❌ 훈련 중 오류 발생: {e}")

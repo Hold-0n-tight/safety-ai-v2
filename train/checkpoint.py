@@ -22,10 +22,12 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 import flwr as fl
 import torch
+
+from train.drive_sync import mirror_file
 
 
 def save_round_checkpoint(
@@ -34,8 +36,13 @@ def save_round_checkpoint(
     out_dir: Path,
     state_dict_keys: Iterable[str],
     strategy: str,
+    drive_dir: Optional[Path] = None,
 ) -> Path:
     """Persist ``parameters`` as a ``state_dict`` plus sidecar metadata.
+
+    When ``drive_dir`` is set, the four written files (round_NNN.pt /
+    round_NNN.meta.json / latest.pt / latest.meta.json) are also mirrored
+    there. Drive mirror failures are logged but never raised.
 
     Returns the path to the round's ``.pt`` file.
     """
@@ -67,7 +74,13 @@ def save_round_checkpoint(
         encoding="utf-8",
     )
 
-    shutil.copyfile(pt_path, out_dir / "latest.pt")
-    shutil.copyfile(meta_path, out_dir / "latest.meta.json")
+    latest_pt = out_dir / "latest.pt"
+    latest_meta = out_dir / "latest.meta.json"
+    shutil.copyfile(pt_path, latest_pt)
+    shutil.copyfile(meta_path, latest_meta)
+
+    if drive_dir is not None:
+        for f in (pt_path, meta_path, latest_pt, latest_meta):
+            mirror_file(f, Path(drive_dir))
 
     return pt_path

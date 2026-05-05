@@ -47,6 +47,20 @@ python run_federated.py --config config/fl/smoke_fedprox.yaml
 - `torch.cuda.is_available()`이 False면 Ray의 `client_resources`가 자동으로 `num_gpus=0`으로 잡혀 GPU 스케줄링 hang이 발생하지 않습니다. 명시적 override가 필요하면 `cfg.fl.client_resources`로.
 - 첫 라운드 device 선택은 stdout에 찍힙니다 (`Client using mps` 등).
 
+### Colab + Google Drive 자동 백업
+
+Colab에서 학습할 때 Drive를 마운트하고 `DRIVE_DIR`만 export하면 매 라운드 체크포인트와 학습 종료 후 결과 디렉토리 전체가 Drive로 자동 미러됩니다. Colab disconnect 시에도 마지막 라운드 weights는 Drive에 남으므로 PR #9의 `--resume`이 그 위에서 이어 학습합니다.
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+
+import os
+os.environ['DRIVE_DIR'] = '/content/drive/MyDrive/safety-ai-runs'
+```
+
+YAML로 지정하고 싶으면 `cfg.train.drive_dir`이 env보다 우선합니다. 라운드별 미러를 끄려면 `cfg.train.drive_sync_per_round: false` (기본 true). Drive 경로가 존재하지 않거나 쓰기 실패해도 학습은 정상 진행되고 경고만 로그에 남습니다.
+
 ## 🏗️ **프로젝트 구조**
 
 ```

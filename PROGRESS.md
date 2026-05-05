@@ -18,6 +18,7 @@ fork left codex PRs #1–#4 in the numbering).
 | 4   | `feat/pathmnist-loader`      | Add `medmnist`, PathMNIST loader, `dataset_split.py` branch, config   | merged      | #5    |
 | 5   | `chore/smoke-test-config`    | Smoke-test FL config (rounds=2, tiny model, few clients) + README     | merged      | #6    |
 | 6   | `feat/checkpoint-saving`     | Per-round global-model checkpoints + sidecar meta + `latest.pt`       | merged      | #7    |
+| 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | open        | #8    |
 
 **Cleanup series complete; main-experiment infra series in progress.**
 
@@ -29,7 +30,7 @@ small PRs:
 | #   | Branch                       | Goal                                                                  | Status      |
 | --- | ---------------------------- | --------------------------------------------------------------------- | ----------- |
 | 6   | `feat/checkpoint-saving`     | Save aggregated global model after each round (state_dict + meta)     | merged      |
-| 7   | `feat/drive-autosave`        | Auto-sync `results/<run>/` to Google Drive at end of run              | open        |
+| 7   | `feat/drive-autosave`        | Per-round + end-of-run mirror to Google Drive (Colab disconnect-safe) | open        |
 | 8   | `feat/resume-training`       | `--resume <run_dir>` flag continues from `latest.pt`                  | planned     |
 | 9   | `feat/main-exp-configs`      | rounds=50, local_epochs=5, alpha sweep configs (FedAvg/Prox/BN)       | planned     |
 
