@@ -1,0 +1,22 @@
+model:
+  name: efficientnet_b0
+  output_dim: 9
+
+train:
+  strategy: fedavg
+  rounds: 50
+  local_epochs: 5
+  batch_size: 64
+  lr: 0.001
+  optimizer: adam
+
+fl:
+  fraction_fit: 1.0
+  min_fit_clients: 5
+  min_available_clients: 5
+
+dataset:
+  name: pathmnist
+  root: data/medmnist
+  size: 224
+  split_path: data/split/pathmnist_dirichlet_alpha10.json
