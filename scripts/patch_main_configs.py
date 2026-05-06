@@ -8,8 +8,12 @@ FL config:
   this resolution rather than upsampling to 224.
 * ``fl.client_resources.{num_cpus, num_gpus}`` — Ray's per-client
   reservation. The default ``num_gpus=1`` serialises clients on a single
-  T4; ``num_gpus=0.2`` lets all 5 clients share the GPU and run
-  concurrently.
+  T4. With Colab Free's 2 vCPU + 1 T4, the practical maximum is
+  ``num_cpus=1, num_gpus=0.2`` → Ray fits ``min(floor(2/1), floor(1/0.2))
+  = min(2, 5) = 2`` actors, so 5 clients run as 3 waves of 2/2/1
+  rather than serially. Bumping ``num_cpus`` to 2 silently drops the
+  pool back to a single actor on Colab Free — confirmed against
+  observed behaviour.
 
 Re-runnable. The user kept the script under ``scripts/`` so future bulk
 adjustments (e.g. dropping size further or changing batching) are a single
@@ -36,7 +40,7 @@ from omegaconf import OmegaConf
 
 DEFAULT_DIR = Path("config/fl/main")
 DEFAULT_SIZE = 64
-DEFAULT_NUM_CPUS = 2
+DEFAULT_NUM_CPUS = 1
 DEFAULT_NUM_GPUS = 0.2
 
 
@@ -57,7 +61,7 @@ def main() -> None:
     p.add_argument("--size", type=int, default=DEFAULT_SIZE,
                    help="dataset.size value (default: 64)")
     p.add_argument("--num-cpus", type=int, default=DEFAULT_NUM_CPUS,
-                   help="fl.client_resources.num_cpus (default: 2)")
+                   help="fl.client_resources.num_cpus (default: 1, sized for Colab Free 2 vCPU)")
     p.add_argument("--num-gpus", type=float, default=DEFAULT_NUM_GPUS,
                    help="fl.client_resources.num_gpus (default: 0.2)")
     p.add_argument("--only", type=str, default=None,
