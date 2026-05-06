@@ -57,7 +57,7 @@ All three strategies subclass `flwr.server.strategy.FedAvg` and inject `evaluate
 
 - **FedAvg** — thin wrapper, just adds round logging.
 - **FedProx** — overrides `configure_fit` to inject `mu` into the per-round client config dict. The client picks it up in `fit()` and adds the proximal term to its loss.
-- **FedBN** — overrides `aggregate_fit` to skip BatchNorm running stats during aggregation (zeroed dummies are emitted for those slots). The client side cooperates: in `FederatedClient.set_parameters` (`train/federated.py:97`), when `strategy == "fedbn"`, BN parameter slots received from the server are *ignored* and the client keeps its local BN values. Both halves must stay in sync — if you change the BN-detection predicate in one place, change `_is_bn` in `federated.py` and `_is_bn_param` in `strategies.py` together.
+- **FedBN** — server-side aggregation is identical to FedAvg (delegates via `super().aggregate_fit`). The FedBN distinction is purely client-side: in `FederatedClient.set_parameters` (`train/federated.py`), when `strategy == "fedbn"`, BN running stats received from the server are *ignored* and the client keeps its own. The earlier implementation emitted zeros at BN-stat slots in `aggregate_fit`, which was correct for clients (they ignored the zeros) but catastrophic for the centralized `evaluate_fn` — `model.eval()` BatchNorm with `running_var=0` and ~50 BN layers in EfficientNet-B0 overflows fp32 → NaN loss starting at round 1. Source-of-truth predicate for BN keys is now `_is_bn` in `federated.py` only.
 
 ### Data loading (`train/loader.py`)
 
