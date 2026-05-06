@@ -3,7 +3,7 @@ model:
   output_dim: 9
 train:
   strategy: fedavg
-  rounds: 50
+  rounds: 25
   local_epochs: 5
   batch_size: 64
   lr: 0.001
