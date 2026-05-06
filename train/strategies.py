@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Union
 
 import flwr as fl
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from omegaconf import DictConfig
@@ -25,17 +24,6 @@ from train.device import pick_device
 from train.drive_sync import per_round_enabled, resolve_drive_dir
 from train.models import init_net
 from train.loader import _infer_img_size, get_test_dataset
-
-
-# ──────────────────────────────────────────────────────────────
-# Helper: BN 여부 판별
-# ──────────────────────────────────────────────────────────────
-def _is_bn_param(name: str) -> bool:
-    return (
-        ".running_mean" in name
-        or ".running_var" in name
-        or ".num_batches_tracked" in name
-    )
 
 
 # ──────────────────────────────────────────────────────────────
@@ -252,16 +240,25 @@ class FedProxStrategy(fl.server.strategy.FedAvg):
 
 
 # ──────────────────────────────────────────────────────────────
-# 3. FedBN  (BN 파라미터 제외 평균)
+# 3. FedBN  (server-side: identical to FedAvg; client-side keeps local BN)
 # ──────────────────────────────────────────────────────────────
 class FedBNStrategy(fl.server.strategy.FedAvg):
-    """BatchNorm 파라미터를 평균에서 제외하는 FedBN 구현."""
+    """FedBN: server aggregates everything (incl. BN running stats) like
+    FedAvg; the FedBN distinction is purely client-side — see
+    ``FederatedClient.set_parameters`` in ``train/federated.py``, which
+    skips BN slots when ``cfg.train.strategy == "fedbn"`` so each client
+    keeps its own running_mean / running_var.
+
+    The earlier implementation emitted zeros at BN-stat slots in
+    ``aggregate_fit``. Clients ignored those zeros (correct), but the
+    centralized evaluate_fn loaded them straight into ``model.eval()`` →
+    ``(x - 0) / sqrt(0 + eps)`` blew up through ~50 BN layers in
+    EfficientNet-B0 → fp32 overflow → Round 1 Loss = NaN. Aggregating
+    BN stats normally fixes the eval path and changes nothing on the
+    client side (clients still discard them).
+    """
 
     def __init__(self, cfg: DictConfig, initial_parameters: Optional[fl.common.Parameters] = None):
-        # 모델 한 번 생성 → state_dict 키 순서 확보
-        model = init_net(cfg.model.name, cfg.model.output_dim)
-        self._parameter_names: List[str] = list(model.state_dict().keys())
-
         super().__init__(
             min_fit_clients=cfg.fl.min_fit_clients,
             min_available_clients=cfg.fl.min_available_clients,
@@ -269,7 +266,8 @@ class FedBNStrategy(fl.server.strategy.FedAvg):
             evaluate_fn=_create_centralized_evaluate_fn(cfg),  # 중앙화된 평가 추가
             initial_parameters=initial_parameters,
         )
-        _init_checkpointing(self, cfg, self._parameter_names)
+        ref_model = init_net(cfg.model.name, cfg.model.output_dim)
+        _init_checkpointing(self, cfg, ref_model.state_dict().keys())
 
     def configure_fit(self, server_round: int, parameters: fl.common.Parameters, client_manager: fl.server.client_manager.ClientManager):
         """라운드별 참여 클라이언트 로깅 추가"""
@@ -278,52 +276,10 @@ class FedBNStrategy(fl.server.strategy.FedAvg):
         print(f"\n🔄 Round {server_round} (FedBN) - 참여 클라이언트: {sorted(client_ids)} (총 {len(client_ids)}개)")
         return config
 
-    def aggregate_fit(  # noqa: D401
-        self,
-        rnd: int,
-        results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes]],
-        failures,
-    ) -> Tuple[fl.common.Parameters | None, Dict[str, fl.common.Scalar]]:
-        """FedBN aggregation: 비-BN 파라미터만 평균화, BN 파라미터는 제외"""
-        if not results:
-            return None, {}
-
-        # 클라이언트별 파라미터 수집
-        weights_results = [
-            (fl.common.parameters_to_ndarrays(fit_res.parameters), fit_res.num_examples)
-            for _, fit_res in results
-        ]
-
-        # 비-BN 파라미터만 평균화
-        aggregated_ndarrays = []
-        for i, param_name in enumerate(self._parameter_names):
-            if _is_bn_param(param_name):
-                # BN 파라미터: 서버에서 전혀 건드리지 않음 (클라이언트가 로컬 값 유지)
-                # 더미 값으로 0으로 채운 배열 사용 (실제로는 클라이언트에서 무시됨)
-                dummy_shape = weights_results[0][0][i].shape
-                aggregated_ndarrays.append(np.zeros(dummy_shape, dtype=weights_results[0][0][i].dtype))
-            else:
-                # 비-BN 파라미터: 가중 평균
-                total_examples = sum(num_examples for _, num_examples in weights_results)
-                weighted_avg = np.zeros_like(weights_results[0][0][i])
-                
-                for weights, num_examples in weights_results:
-                    weighted_avg += weights[i] * (num_examples / total_examples)
-                
-                aggregated_ndarrays.append(weighted_avg)
-
-        # 메트릭 계산
-        metrics_aggregated = {}
-        if results:
-            total_examples = sum(fit_res.num_examples for _, fit_res in results)
-            metrics_aggregated["total_examples"] = total_examples
-
-        aggregated_parameters = fl.common.ndarrays_to_parameters(aggregated_ndarrays)
-        # FedBN: BN slots in the saved checkpoint are zero (server-side dummies).
-        # Each client keeps its own BN locally per FedBN's design — the resume
-        # path (PR #9) re-initialises BN per client, which matches that contract.
-        _maybe_save_checkpoint(self, rnd, aggregated_parameters)
-        return aggregated_parameters, metrics_aggregated
+    def aggregate_fit(self, server_round, results, failures):
+        aggregated_parameters, metrics = super().aggregate_fit(server_round, results, failures)
+        _maybe_save_checkpoint(self, server_round, aggregated_parameters)
+        return aggregated_parameters, metrics
 
 
 # ──────────────────────────────────────────────────────────────
