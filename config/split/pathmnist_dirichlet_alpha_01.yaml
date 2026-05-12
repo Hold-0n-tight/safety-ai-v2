@@ -1,0 +1,10 @@
+dataset:
+  name: pathmnist
+  root: data/medmnist           # medmnist download cache (gitignored)
+  size: 28                      # split indices are size-independent; size=28 keeps generation cheap
+  split:
+    type: dirichlet
+    alpha: 0.1                  # extreme non-IID
+    num_clients: 5              # main-exp: unified to 5 clients across all alphas
+    seed: 42
+    cache: true
